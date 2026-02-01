@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Search, Filter, Grid, List, MapPin, Star, Heart, Clock, Zap, Gavel } from "lucide-react"
+import { useState, useEffect, Suspense } from "react"
+import { Search, Filter, Grid, List, MapPin, Star, Heart, Clock, Zap, Gavel, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -14,145 +14,70 @@ import { Separator } from "@/components/ui/separator"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
+import { useAds, useCategories, useLocations } from "@/hooks/use-api"
+import { useSearchParams } from "next/navigation"
+import Image from "next/image"
 
-const categories = [
-  "All Categories",
-  "Vehicles",
-  "Electronics",
-  "Property",
-  "Jobs",
-  "Services",
-  "Fashion & Beauty",
-  "Home & Garden",
-  "Sports & Hobbies",
-]
+function ListingsContent() {
+  const searchParams = useSearchParams()
 
-const locations = ["All Locations", "Colombo", "Kandy", "Galle", "Jaffna", "Negombo", "Matara", "Kurunegala"]
-
-const mockAds = [
-  {
-    id: 1,
-    title: "iPhone 15 Pro Max 256GB - Like New",
-    price: 450000,
-    location: "Colombo",
-    category: "Electronics",
-    condition: "Used",
-    images: ["/placeholder.jpg"],
-    timePosted: "2 hours ago",
-    verified: true,
-    boosted: true,
-    auction: false,
-    views: 234,
-    favorites: 12,
-    seller: {
-      name: "John Doe",
-      rating: 4.8,
-      verified: true,
-    },
-  },
-  {
-    id: 2,
-    title: "Toyota Prius 2020 - Hybrid",
-    price: 8500000,
-    location: "Kandy",
-    category: "Vehicles",
-    condition: "Used",
-    images: ["/placeholder.jpg"],
-    timePosted: "5 hours ago",
-    verified: true,
-    boosted: false,
-    auction: true,
-    views: 1456,
-    favorites: 67,
-    seller: {
-      name: "Sarah Wilson",
-      rating: 4.9,
-      verified: true,
-    },
-  },
-  {
-    id: 3,
-    title: "MacBook Pro M3 14-inch",
-    price: 650000,
-    location: "Colombo",
-    category: "Electronics",
-    condition: "New",
-    images: ["/placeholder.jpg"],
-    timePosted: "1 day ago",
-    verified: false,
-    boosted: true,
-    auction: false,
-    views: 89,
-    favorites: 5,
-    seller: {
-      name: "Mike Chen",
-      rating: 4.5,
-      verified: false,
-    },
-  },
-  {
-    id: 4,
-    title: "Apartment for Rent - Colombo 03",
-    price: 75000,
-    location: "Colombo",
-    category: "Property",
-    condition: "New",
-    images: ["/placeholder.jpg"],
-    timePosted: "3 days ago",
-    verified: true,
-    boosted: false,
-    auction: false,
-    views: 567,
-    favorites: 23,
-    seller: {
-      name: "Property Plus",
-      rating: 4.7,
-      verified: true,
-    },
-  },
-]
-
-export default function ListingsPage() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("All Categories")
-  const [selectedLocation, setSelectedLocation] = useState("All Locations")
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "")
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "all")
+  const [selectedLocation, setSelectedLocation] = useState(searchParams.get("location") || "all")
   const [priceRange, setPriceRange] = useState([0, 10000000])
   const [condition, setCondition] = useState("all")
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sortBy, setSortBy] = useState("newest")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-  const [filteredAds, setFilteredAds] = useState(mockAds)
+  const [page, setPage] = useState(1)
 
+  const { ads, loading: adsLoading, error: adsError, getAds } = useAds()
+  const { categories, getCategories } = useCategories()
+  const { locations, getLocations } = useLocations()
+
+  // Fetch initial data (categories and locations)
   useEffect(() => {
-    const filtered = mockAds.filter((ad) => {
-      const matchesSearch = ad.title.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = selectedCategory === "All Categories" || ad.category === selectedCategory
-      const matchesLocation = selectedLocation === "All Locations" || ad.location === selectedLocation
-      const matchesPrice = ad.price >= priceRange[0] && ad.price <= priceRange[1]
-      const matchesCondition = condition === "all" || ad.condition.toLowerCase() === condition
-      const matchesVerified = !verifiedOnly || ad.verified
+    getCategories()
+    getLocations()
+  }, [getCategories, getLocations])
 
-      return matchesSearch && matchesCategory && matchesLocation && matchesPrice && matchesCondition && matchesVerified
-    })
+  // Fetch ads when filters change
+  useEffect(() => {
+    const fetchAds = async () => {
+      const params: any = {
+        page,
+        limit: 12,
+        minPrice: priceRange[0],
+        maxPrice: priceRange[1],
+        sort: sortBy
+      }
 
-    // Sort results
-    switch (sortBy) {
-      case "price-low":
-        filtered.sort((a, b) => a.price - b.price)
-        break
-      case "price-high":
-        filtered.sort((a, b) => b.price - a.price)
-        break
-      case "popular":
-        filtered.sort((a, b) => b.views - a.views)
-        break
-      default:
-        // newest first (default)
-        break
+      if (searchQuery) params.search = searchQuery
+      if (selectedCategory && selectedCategory !== "all") params.category = selectedCategory
+      if (selectedLocation && selectedLocation !== "all") params.location = selectedLocation
+      if (condition && condition !== "all") params.condition = condition
+
+      // Note: backend might need to support verifiedOnly filter
+
+      await getAds(params)
     }
 
-    setFilteredAds(filtered)
-  }, [searchQuery, selectedCategory, selectedLocation, priceRange, condition, verifiedOnly, sortBy])
+    const timer = setTimeout(() => {
+      fetchAds()
+    }, 500) // Debounce search
+
+    return () => clearTimeout(timer)
+  }, [
+    searchQuery,
+    selectedCategory,
+    selectedLocation,
+    priceRange,
+    condition,
+    verifiedOnly,
+    sortBy,
+    page,
+    getAds
+  ])
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-LK", {
@@ -162,40 +87,38 @@ export default function ListingsPage() {
     }).format(price)
   }
 
-  const AdCard = ({ ad }: { ad: (typeof mockAds)[0] }) => (
+  const AdCard = ({ ad }: { ad: any }) => (
     <Card
-      className={`group hover:shadow-lg transition-all duration-300 ${ad.boosted ? "ring-2 ring-primary/20 shadow-lg shadow-primary/10" : ""} ${viewMode === "list" ? "flex-row" : ""}`}
+      className={`group hover:shadow-lg transition-all duration-300 ${ad.isBoosted ? "ring-2 ring-primary/20 shadow-lg shadow-primary/10" : ""} ${viewMode === "list" ? "flex-row" : ""}`}
     >
       <CardContent className={`p-0 ${viewMode === "list" ? "flex" : ""}`}>
         <div className={`relative ${viewMode === "list" ? "w-48 flex-shrink-0" : "w-full h-48"}`}>
-          <img
-            src={ad.images[0] || "/placeholder.svg"}
-            alt={ad.title}
-            className="w-full h-full object-cover rounded-t-lg group-hover:scale-105 transition-transform duration-300"
-          />
+          <div className="relative w-full h-full overflow-hidden rounded-t-lg">
+            <Image
+              src={ad.images?.[0]?.url || "/placeholder.svg?height=200&width=300"}
+              alt={ad.title}
+              fill
+              className="object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          </div>
 
           {/* Badges */}
           <div className="absolute top-2 left-2 flex flex-col gap-1">
-            {ad.boosted && (
+            {ad.isBoosted && (
               <Badge className="bg-primary text-primary-foreground animate-pulse">
                 <Zap className="w-3 h-3 mr-1" />
                 Boosted
               </Badge>
             )}
-            {ad.auction && (
-              <Badge className="bg-orange-500 text-white">
-                <Gavel className="w-3 h-3 mr-1" />
-                Auction
-              </Badge>
-            )}
-            {ad.verified && <Badge className="bg-green-500 text-white">Verified</Badge>}
+            {/* Auction badge if supported by API */}
+            {ad.user?.verified && <Badge className="bg-green-500 text-white">Verified</Badge>}
           </div>
 
           {/* Favorite Button */}
           <Button
             variant="ghost"
             size="sm"
-            className="absolute top-2 right-2 bg-white/80 hover:bg-white text-gray-700 hover:text-red-500"
+            className="absolute top-2 right-2 bg-white/80 hover:bg-white text-gray-700 hover:text-red-500 z-10"
           >
             <Heart className="w-4 h-4" />
           </Button>
@@ -204,7 +127,7 @@ export default function ListingsPage() {
         <div className={`p-4 ${viewMode === "list" ? "flex-1" : ""}`}>
           <div className="flex justify-between items-start mb-2">
             <h3 className="font-semibold text-lg line-clamp-2 group-hover:text-primary transition-colors">
-              <Link href={`/ad/${ad.id}`}>{ad.title}</Link>
+              <Link href={`/listings/${ad.id}`}>{ad.title}</Link>
             </h3>
           </div>
 
@@ -212,24 +135,20 @@ export default function ListingsPage() {
 
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
             <MapPin className="w-4 h-4" />
-            <span>{ad.location}</span>
+            <span>{ad.location?.name || 'Unknown Location'}</span>
             <span>•</span>
             <Clock className="w-4 h-4" />
-            <span>{ad.timePosted}</span>
+            <span>{new Date(ad.createdAt).toLocaleDateString()}</span>
           </div>
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                <span className="text-sm">{ad.seller.rating}</span>
-              </div>
-              <span className="text-sm text-muted-foreground">•</span>
-              <span className="text-sm text-muted-foreground">{ad.views} views</span>
+              {/* Rating if available */}
+              <span className="text-sm text-muted-foreground">{ad.views || 0} views</span>
             </div>
 
             <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
-              <Link href={`/ad/${ad.id}`}>View Details</Link>
+              <Link href={`/listings/${ad.id}`}>View Details</Link>
             </Button>
           </div>
         </div>
@@ -259,12 +178,13 @@ export default function ListingsPage() {
 
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-full lg:w-48">
-                <SelectValue />
+                <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories?.categories?.map((category: any) => (
+                  <SelectItem key={category.id} value={category.slug || category.id}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -272,12 +192,13 @@ export default function ListingsPage() {
 
             <Select value={selectedLocation} onValueChange={setSelectedLocation}>
               <SelectTrigger className="w-full lg:w-48">
-                <SelectValue />
+                <SelectValue placeholder="Location" />
               </SelectTrigger>
               <SelectContent>
-                {locations.map((location) => (
-                  <SelectItem key={location} value={location}>
-                    {location}
+                <SelectItem value="all">All Locations</SelectItem>
+                {locations?.locations?.map((location: any) => (
+                  <SelectItem key={location.id} value={location.slug || location.id}>
+                    {location.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -323,9 +244,9 @@ export default function ListingsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Conditions</SelectItem>
-                        <SelectItem value="new">New</SelectItem>
-                        <SelectItem value="used">Used</SelectItem>
-                        <SelectItem value="refurbished">Refurbished</SelectItem>
+                        <SelectItem value="NEW">New</SelectItem>
+                        <SelectItem value="USED">Used</SelectItem>
+                        <SelectItem value="REFURBISHED">Refurbished</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -334,7 +255,7 @@ export default function ListingsPage() {
 
                   {/* Verified Only */}
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="verified" checked={verifiedOnly} onCheckedChange={setVerifiedOnly} />
+                    <Checkbox id="verified" checked={verifiedOnly} onCheckedChange={(checked) => setVerifiedOnly(checked as boolean)} />
                     <Label htmlFor="verified" className="text-sm">
                       Verified sellers only
                     </Label>
@@ -349,7 +270,9 @@ export default function ListingsPage() {
             {/* Results Header */}
             <div className="flex justify-between items-center mb-6">
               <div>
-                <p className="text-muted-foreground">Showing {filteredAds.length} results</p>
+                <p className="text-muted-foreground">
+                  {adsLoading ? "Loading..." : `Showing ${ads?.ads?.length || 0} results`}
+                </p>
               </div>
 
               <div className="flex items-center gap-4">
@@ -359,9 +282,9 @@ export default function ListingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="newest">Newest First</SelectItem>
-                    <SelectItem value="price-low">Price: Low to High</SelectItem>
-                    <SelectItem value="price-high">Price: High to Low</SelectItem>
-                    <SelectItem value="popular">Most Popular</SelectItem>
+                    <SelectItem value="price_asc">Price: Low to High</SelectItem>
+                    <SelectItem value="price_desc">Price: High to Low</SelectItem>
+                    {/* <SelectItem value="popular">Most Popular</SelectItem> */}
                   </SelectContent>
                 </Select>
 
@@ -385,29 +308,95 @@ export default function ListingsPage() {
             </div>
 
             {/* Ad Grid/List */}
-            <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}>
-              {filteredAds.map((ad) => (
-                <AdCard key={ad.id} ad={ad} />
-              ))}
-            </div>
+            {adsLoading ? (
+              <div className="flex justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              </div>
+            ) : adsError ? (
+              <div className="text-center py-20 text-red-500">
+                Error loading ads: {adsError}
+              </div>
+            ) : !ads?.ads?.length ? (
+              <div className="text-center py-20 text-muted-foreground">
+                No ads found matching your criteria.
+              </div>
+            ) : (
+              <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}>
+                {ads.ads.map((ad: any) => (
+                  <AdCard key={ad.id} ad={ad} />
+                ))}
+              </div>
+            )}
 
             {/* Pagination */}
-            <div className="flex justify-center mt-8">
-              <div className="flex items-center gap-2">
-                <Button variant="outline" disabled>
-                  Previous
-                </Button>
-                <Button variant="default">1</Button>
-                <Button variant="outline">2</Button>
-                <Button variant="outline">3</Button>
-                <Button variant="outline">Next</Button>
+            {ads?.paging && ads.paging.pages > 1 && (
+              <div className="flex justify-center mt-8">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="mx-2 text-sm text-muted-foreground">
+                    Page {page} of {ads.paging.pages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(p => Math.min(ads.paging.pages, p + 1))}
+                    disabled={page === ads.paging.pages}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
+            {/* Fallback pagination if api response structure is different - previously it was pagination object */}
+            {ads?.pagination && ads.pagination.pages > 1 && (
+              <div className="flex justify-center mt-8">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="mx-2 text-sm text-muted-foreground">
+                    Page {page} of {ads.pagination.pages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPage(p => Math.min(ads.pagination.pages, p + 1))}
+                    disabled={page === ads.pagination.pages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
 
       <Footer />
     </div>
+  )
+}
+
+export default function ListingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex flex-col">
+        <Navigation />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+        <Footer />
+      </div>
+    }>
+      <ListingsContent />
+    </Suspense>
   )
 }
