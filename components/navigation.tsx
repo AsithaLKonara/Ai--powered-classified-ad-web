@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search, Menu, X, Bell, User, MessageCircle, Plus, Zap, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,19 +15,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
-
-const categories = [
-  "All Categories",
-  "Vehicles",
-  "Electronics",
-  "Property",
-  "Jobs",
-  "Services",
-  "Fashion & Beauty",
-  "Home & Garden",
-]
-
-const locations = ["All Sri Lanka", "Colombo", "Kandy", "Galle", "Jaffna", "Negombo", "Matara"]
+import { useCategories, useLocations } from "@/hooks/use-api"
+import { useRouter } from "next/navigation"
 
 const languages = [
   { code: "en", name: "English", flag: "🇺🇸" },
@@ -36,11 +25,31 @@ const languages = [
 ]
 
 export function Navigation() {
+  const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLanguage, setSelectedLanguage] = useState("en")
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [selectedLocation, setSelectedLocation] = useState("all")
+
+  const { categories: fetchedCategories, getCategories } = useCategories()
+  const { locations: fetchedLocations, getLocations } = useLocations()
+
+  useEffect(() => {
+    getCategories()
+    getLocations()
+  }, [getCategories, getLocations])
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen)
+
+  const handleSearch = () => {
+    const params = new URLSearchParams()
+    if (searchQuery) params.append("search", searchQuery)
+    if (selectedCategory && selectedCategory !== "all") params.append("category", selectedCategory)
+    if (selectedLocation && selectedLocation !== "all") params.append("location", selectedLocation)
+
+    router.push(`/listings?${params.toString()}`)
+  }
 
   return (
     <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
@@ -105,6 +114,7 @@ export function Navigation() {
               <Link href="/chat">
                 <MessageCircle className="w-5 h-5" />
                 <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                  {/* TODO: Fetch real unread count */}
                   3
                 </Badge>
               </Link>
@@ -114,6 +124,7 @@ export function Navigation() {
             <Button variant="ghost" size="sm" className="relative">
               <Bell className="w-5 h-5" />
               <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                {/* TODO: Fetch real notification count */}
                 2
               </Badge>
             </Button>
@@ -173,37 +184,40 @@ export function Navigation() {
                 placeholder="Search for anything..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 className="pl-10 bg-background border-border"
               />
             </div>
 
-            <Select defaultValue="All Categories">
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-full md:w-48">
-                <SelectValue />
+                <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                <SelectItem value="all">All Categories</SelectItem>
+                {fetchedCategories?.categories?.map((category: any) => (
+                  <SelectItem key={category.id} value={category.slug}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            <Select defaultValue="All Sri Lanka">
+            <Select value={selectedLocation} onValueChange={setSelectedLocation}>
               <SelectTrigger className="w-full md:w-48">
-                <SelectValue />
+                <SelectValue placeholder="All Sri Lanka" />
               </SelectTrigger>
               <SelectContent>
-                {locations.map((location) => (
-                  <SelectItem key={location} value={location}>
-                    {location}
+                <SelectItem value="all">All Sri Lanka</SelectItem>
+                {fetchedLocations?.locations?.map((location: any) => (
+                  <SelectItem key={location.id} value={location.slug}>
+                    {location.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            <Button className="bg-primary hover:bg-primary/90">
+            <Button className="bg-primary hover:bg-primary/90" onClick={handleSearch}>
               <Search className="w-4 h-4 mr-2" />
               Search
             </Button>

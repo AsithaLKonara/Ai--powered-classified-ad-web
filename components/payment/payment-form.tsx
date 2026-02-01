@@ -73,50 +73,109 @@ export function PaymentForm({ adId, adTitle, onSuccess, onCancel }: PaymentFormP
   const [paymentMethod, setPaymentMethod] = useState<string>("payhere")
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    cardNumber: "",
-    cardName: "",
-    expiryDate: "",
-    cvv: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    address: "",
+    city: "",
   })
+
+  // Mock Stripe/PayHere config
+  const PAYHERE_MERCHANT_ID = process.env.NEXT_PUBLIC_PAYHERE_MERCHANT_ID || "121XXXX"
+  const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_KEY || "pk_test_..."
 
   const selectedBoost = boostPackages.find(pkg => pkg.id === selectedPackage)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handlePayHerePayment = async () => {
+    // 1. Create Order/Pending Boost on backend
+    // 2. Submit hidden form to PayHere
+
+    // For this demo, we simulate success after delay
     setLoading(true)
 
+    // Simulate API call to create pending boost
     try {
-      // Here you would integrate with PayHere or Stripe
-      // For now, we'll simulate a payment
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // In real app: const order = await createOrder(adId, selectedPackage)
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
-      // Create boost record
-      const boostData = {
-        adId,
-        packageId: selectedPackage,
-        amount: selectedBoost?.price || 0,
-        duration: selectedBoost?.duration || 0,
+      // Construct PayHere params
+      const payhereParams = {
+        merchant_id: PAYHERE_MERCHANT_ID,
+        return_url: `${window.location.origin}/payment/return`,
+        cancel_url: `${window.location.origin}/payment/cancel`,
+        notify_url: `${window.location.origin}/api/payment/notify`,
+        order_id: `ORDER-${Date.now()}`,
+        items: `Boost: ${selectedBoost?.name}`,
+        currency: "LKR",
+        amount: selectedBoost?.price,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        city: formData.city,
+        country: "Sri Lanka",
       }
 
-      // Call API to create boost
-      const response = await fetch("/api/boosts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(boostData),
-      })
+      console.log("Submitting to PayHere:", payhereParams)
 
-      if (response.ok) {
-        onSuccess?.()
-      } else {
-        throw new Error("Failed to create boost")
-      }
-    } catch (error) {
-      console.error("Payment failed:", error)
-      alert("Payment failed. Please try again.")
+      // Simulate success callback
+      await completeBoostCreation()
+
+    } catch (e) {
+      console.error(e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleStripePayment = async () => {
+    setLoading(true)
+    try {
+      // Call backend to create PaymentIntent
+      // const { clientSecret } = await fetch('/api/payment/create-intent')...
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      await completeBoostCreation()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const completeBoostCreation = async () => {
+    // Create boost record
+    const boostData = {
+      adId,
+      packageId: selectedPackage,
+      amount: selectedBoost?.price || 0,
+      duration: selectedBoost?.duration || 0,
+      paymentId: `PAY-${Date.now()}` // Mock payment ID
+    }
+
+    // Call API to create boost
+    const response = await fetch("/api/boosts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(boostData),
+    })
+
+    if (response.ok) {
+      onSuccess?.()
+    } else {
+      throw new Error("Failed to create boost")
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (paymentMethod === "payhere") {
+      await handlePayHerePayment()
+    } else {
+      await handleStripePayment()
     }
   }
 
@@ -141,11 +200,10 @@ export function PaymentForm({ adId, adTitle, onSuccess, onCancel }: PaymentFormP
                 {boostPackages.map((pkg) => (
                   <div
                     key={pkg.id}
-                    className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
-                      selectedPackage === pkg.id
+                    className={`relative border rounded-lg p-4 cursor-pointer transition-all ${selectedPackage === pkg.id
                         ? "border-primary bg-primary/5"
                         : "border-gray-200 hover:border-gray-300"
-                    }`}
+                      }`}
                     onClick={() => setSelectedPackage(pkg.id)}
                   >
                     {pkg.popular && (
@@ -204,59 +262,68 @@ export function PaymentForm({ adId, adTitle, onSuccess, onCancel }: PaymentFormP
             </RadioGroup>
           </div>
 
-          {/* Payment Form */}
-          {paymentMethod === "payhere" && (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="cardNumber">Card Number</Label>
-                  <Input
-                    id="cardNumber"
-                    type="text"
-                    placeholder="1234 5678 9012 3456"
-                    value={formData.cardNumber}
-                    onChange={(e) => setFormData(prev => ({ ...prev, cardNumber: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cardName">Cardholder Name</Label>
-                  <Input
-                    id="cardName"
-                    type="text"
-                    placeholder="John Doe"
-                    value={formData.cardName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, cardName: e.target.value }))}
-                    required
-                  />
-                </div>
+          {/* Billing Details (Required for PayHere) */}
+          <form id="payment-form" onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="firstName">First Name</Label>
+                <Input
+                  id="firstName"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                  required
+                />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="expiryDate">Expiry Date</Label>
-                  <Input
-                    id="expiryDate"
-                    type="text"
-                    placeholder="MM/YY"
-                    value={formData.expiryDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, expiryDate: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cvv">CVV</Label>
-                  <Input
-                    id="cvv"
-                    type="text"
-                    placeholder="123"
-                    value={formData.cvv}
-                    onChange={(e) => setFormData(prev => ({ ...prev, cvv: e.target.value }))}
-                    required
-                  />
-                </div>
+              <div>
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input
+                  id="lastName"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                  required
+                />
               </div>
-            </form>
-          )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={formData.address}
+                onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                value={formData.city}
+                onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                required
+              />
+            </div>
+          </form>
 
           {/* Summary */}
           <div className="border-t pt-4">
@@ -287,7 +354,7 @@ export function PaymentForm({ adId, adTitle, onSuccess, onCancel }: PaymentFormP
             </Button>
             <Button
               type="submit"
-              onClick={handleSubmit}
+              form="payment-form"
               className="flex-1"
               disabled={loading}
             >
@@ -308,4 +375,4 @@ export function PaymentForm({ adId, adTitle, onSuccess, onCancel }: PaymentFormP
       </Card>
     </div>
   )
-} 
+}

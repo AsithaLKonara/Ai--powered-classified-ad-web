@@ -8,6 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Send, MessageCircle, User, Loader2 } from "lucide-react"
 import { useChat } from "@/hooks/use-api"
+import { useSocket } from "@/hooks/use-socket"
+import { useSession } from "next-auth/react"
 
 interface Message {
   id: string
@@ -39,23 +41,73 @@ interface Conversation {
 }
 
 export function ChatInterface() {
+  const { data: session } = useSession()
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [conversations, setConversations] = useState<Conversation[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  
-  const { conversations: apiConversations, loading, error, getConversations, sendMessage } = useChat()
 
+  const { conversations: apiConversations, loading, error, getConversations, sendMessage } = useChat()
+  const { socket, isConnected } = useSocket()
+
+  // Initial load
   useEffect(() => {
     getConversations()
   }, [getConversations])
 
+  // Sync API conversations to state
   useEffect(() => {
     if (apiConversations?.conversations) {
       setConversations(apiConversations.conversations)
     }
   }, [apiConversations])
+
+  // Socket setup
+  useEffect(() => {
+    if (socket && session?.user?.id) {
+      // Join my own room
+      socket.emit("join-user-room", session.user.id)
+
+      // Listen for incoming messages
+      socket.on("new-message", (msg: Message) => {
+        console.log("New message received via socket:", msg)
+
+        // Update messages if looking at this conversation
+        if (selectedConversation && (msg.senderId === selectedConversation.userId || msg.receiverId === selectedConversation.userId)) {
+          setMessages(prev => [...prev, msg])
+        }
+
+        // Update conversations list (update last message, unread count)
+        setConversations(prev => {
+          const exists = prev.find(c => c.userId === msg.senderId || c.userId === msg.receiverId)
+          if (exists) {
+            return prev.map(c => {
+              if (c.userId === msg.senderId || c.userId === msg.receiverId) {
+                return {
+                  ...c,
+                  lastMessage: msg,
+                  unreadCount: (msg.senderId !== session.user.id && (!selectedConversation || selectedConversation.userId !== msg.senderId))
+                    ? c.unreadCount + 1
+                    : c.unreadCount
+                }
+              }
+              return c
+            })
+          } else {
+            // New conversation starter (simplified, might need to fetch user details)
+            // Ideally we re-fetch conversations, but for now:
+            getConversations()
+            return prev
+          }
+        })
+      })
+
+      return () => {
+        socket.off("new-message")
+      }
+    }
+  }, [socket, session?.user?.id, selectedConversation, getConversations])
 
   useEffect(() => {
     scrollToBottom()
@@ -66,7 +118,7 @@ export function ChatInterface() {
   }
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation) return
+    if (!newMessage.trim() || !selectedConversation || !session?.user) return
 
     try {
       const messageData = {
@@ -74,24 +126,42 @@ export function ChatInterface() {
         content: newMessage.trim(),
       }
 
-      await sendMessage(messageData)
-      setNewMessage("")
-      
-      // Add message to local state
+      // Send via API (persistence)
+      const sentMsg = await sendMessage(messageData)
+
+      // Emit via socket for immediate update (or rely on API to do it, but here we do optimistic + socket relay)
+      // Note: server.ts relays 'send-message' event. 
+      // Ideally, the API response confirms it's saved, and we emit so others get it.
+      // Or server side API emits it.
+      // Let's emit it manually for now to ensure real-time feel if server API doesn't.
+
       const newMsg: Message = {
-        id: Date.now().toString(),
+        id: sentMsg?.id || Date.now().toString(),
         content: newMessage.trim(),
-        senderId: "current-user", // This should come from auth
+        senderId: session.user.id as string,
         receiverId: selectedConversation.userId,
         createdAt: new Date().toISOString(),
         sender: {
-          id: "current-user",
-          name: "You",
+          id: session.user.id as string,
+          name: session.user.name || "You",
+          image: session.user.image || undefined
         },
         receiver: selectedConversation.user,
       }
-      
+
+      socket?.emit("send-message", newMsg)
+
+      setNewMessage("")
       setMessages(prev => [...prev, newMsg])
+
+      // Update conversations list
+      setConversations(prev => prev.map(c => {
+        if (c.userId === selectedConversation.userId) {
+          return { ...c, lastMessage: newMsg }
+        }
+        return c
+      }))
+
     } catch (error) {
       console.error("Failed to send message:", error)
     }
@@ -128,6 +198,7 @@ export function ChatInterface() {
           <CardTitle className="flex items-center gap-2">
             <MessageCircle className="w-5 h-5" />
             Conversations
+            {isConnected && <div className="w-2 h-2 rounded-full bg-green-500 ml-auto" title="Connected" />}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -142,9 +213,8 @@ export function ChatInterface() {
               conversations.map((conversation) => (
                 <div
                   key={conversation.userId}
-                  className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    selectedConversation?.userId === conversation.userId ? "bg-gray-100" : ""
-                  }`}
+                  className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${selectedConversation?.userId === conversation.userId ? "bg-gray-100" : ""
+                    }`}
                   onClick={() => setSelectedConversation(conversation)}
                 >
                   <div className="flex items-center gap-3">
@@ -211,16 +281,14 @@ export function ChatInterface() {
                   messages.map((message) => (
                     <div
                       key={message.id}
-                      className={`flex ${
-                        message.senderId === "current-user" ? "justify-end" : "justify-start"
-                      }`}
+                      className={`flex ${message.senderId === session?.user?.id ? "justify-end" : "justify-start"
+                        }`}
                     >
                       <div
-                        className={`max-w-[70%] rounded-lg p-3 ${
-                          message.senderId === "current-user"
+                        className={`max-w-[70%] rounded-lg p-3 ${message.senderId === session?.user?.id
                             ? "bg-primary text-primary-foreground"
                             : "bg-gray-100"
-                        }`}
+                          }`}
                       >
                         <p className="text-sm">{message.content}</p>
                         <p className="text-xs opacity-70 mt-1">
@@ -261,4 +329,4 @@ export function ChatInterface() {
       </Card>
     </div>
   )
-} 
+}
