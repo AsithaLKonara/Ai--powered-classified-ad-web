@@ -5,8 +5,9 @@ import { authOptions } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     const ad = await prisma.ad.findUnique({
       where: { id: params.id },
@@ -15,7 +16,7 @@ export async function GET(
           select: {
             id: true,
             name: true,
-            verified: true,
+            emailVerified: true,
             phone: true,
             email: true,
           }
@@ -30,7 +31,6 @@ export async function GET(
           select: {
             favorites: true,
             bids: true,
-            views: true,
           }
         }
       }
@@ -61,11 +61,12 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -123,7 +124,7 @@ export async function PUT(
           select: {
             id: true,
             name: true,
-            verified: true,
+            emailVerified: true,
           }
         },
         category: true,
@@ -152,7 +153,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
