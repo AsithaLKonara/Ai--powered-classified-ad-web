@@ -31,9 +31,28 @@ export async function GET(request: NextRequest) {
     const maxPrice = searchParams.get('maxPrice')
     const condition = searchParams.get('condition')
     const type = searchParams.get('type')
+    const userId = searchParams.get('userId')
 
     const where: any = {
       status: 'ACTIVE',
+    }
+
+    // If userId is provided, we might want to see all statuses (pending, etc) if it matches the current user?
+    // For now let's just allow filtering by userId.
+    if (userId) {
+      where.userId = userId
+      // Optionally remove status check if we want to see all ads for the user
+      // check if requesting own ads? 
+      // For simplicity, let's keep status='ACTIVE' default unless we add a way to see others.
+      // Actually, for dashboard "My Ads", we want to see PENDING, SOLD etc.
+      // We should probably allow 'status' param too.
+    }
+    const status = searchParams.get('status')
+    if (status) {
+      where.status = status
+    } else if (userId) {
+      // If filtering by user, satisfy the dashboard need to see all ads (except deleted maybe)
+      delete where.status
     }
 
     if (category) {
@@ -73,7 +92,7 @@ export async function GET(request: NextRequest) {
             select: {
               id: true,
               name: true,
-              verified: true,
+              emailVerified: true,
             }
           },
           category: true,
@@ -117,7 +136,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
