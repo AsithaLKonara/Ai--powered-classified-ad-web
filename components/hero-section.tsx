@@ -5,41 +5,76 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Search, MapPin, Sparkles, TrendingUp, Users, Eye, Clock } from "lucide-react"
+import { useAds, useCategories } from "@/hooks/use-api"
+import { useRouter } from "next/navigation"
 
 export function HeroSection() {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [currentStat, setCurrentStat] = useState(0)
+  const { ads, getAds } = useAds()
+  const { categories, getCategories } = useCategories()
+  const [particles, setParticles] = useState<Array<{ left: number, width: number, height: number, delay: number, duration: number }>>([]);
 
-  const trendingTerms = ["iPhone 15", "Toyota Prius", "Apartment Colombo", "Gaming Laptop", "Wedding Dress"]
+  useEffect(() => {
+    getAds({ limit: 1 })
+    getCategories()
+
+    const interval = setInterval(() => {
+      setCurrentStat((prev) => (prev + 1) % 4)
+    }, 3000)
+
+    // Set particles on client side to avoid hydration mismatch
+    setParticles(
+      [...Array(20)].map(() => ({
+        left: Math.random() * 100,
+        width: Math.random() * 4 + 2,
+        height: Math.random() * 4 + 2,
+        delay: Math.random() * 20,
+        duration: Math.random() * 10 + 15,
+      }))
+    );
+
+    return () => clearInterval(interval)
+  }, [getAds, getCategories])
+
+  const totalAds = ads?.pagination?.total || 0
+
+  const trendingTerms = categories?.categories?.slice(0, 5).map((c: any) => c.name) || ["Vehicles", "Electronics", "Property"]
 
   const stats = [
-    { icon: TrendingUp, value: "500K+", label: "Active Ads", color: "text-green-500" },
-    { icon: Users, value: "50K+", label: "Verified Sellers", color: "text-blue-500" },
-    { icon: Eye, value: "1M+", label: "Monthly Views", color: "text-purple-500" },
+    { icon: TrendingUp, value: totalAds > 0 ? `${totalAds}+` : "100+", label: "Active Ads", color: "text-green-500" },
+    { icon: Users, value: "50+", label: "Verified Sellers", color: "text-blue-500" },
+    { icon: Eye, value: "1K+", label: "Monthly Views", color: "text-purple-500" },
     { icon: Clock, value: "24/7", label: "Support", color: "text-orange-500" },
   ]
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentStat((prev) => (prev + 1) % stats.length)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [])
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      router.push(`/listings?search=${encodeURIComponent(searchQuery)}`)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch()
+    }
+  }
 
   return (
     <section className="relative bg-gradient-to-br from-background via-background to-primary/5 py-20 px-4 overflow-hidden">
       {/* Animated Background Particles */}
       <div className="hero-particles">
-        {[...Array(20)].map((_, i) => (
+        {particles.map((p, i) => (
           <div
             key={i}
             className="particle"
             style={{
-              left: `${Math.random() * 100}%`,
-              width: `${Math.random() * 4 + 2}px`,
-              height: `${Math.random() * 4 + 2}px`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
+              left: `${p.left}%`,
+              width: `${p.width}px`,
+              height: `${p.height}px`,
+              animationDelay: `${p.delay}s`,
+              animationDuration: `${p.duration}s`,
             }}
           />
         ))}
@@ -73,6 +108,7 @@ export function HeroSection() {
                     placeholder="What are you looking for? (AI-powered search)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={handleKeyDown}
                     className="pl-12 pr-4 py-6 text-lg border-0 rounded-l-lg focus-visible:ring-0 search-focus bg-transparent"
                   />
                   {searchQuery && (
@@ -83,13 +119,12 @@ export function HeroSection() {
                           AI Suggestions
                         </div>
                         <div className="space-y-2">
-                          <div className="p-3 hover:bg-accent/50 rounded-lg cursor-pointer transition-all duration-200 hover:scale-[1.02]">
-                            <div className="font-medium">{searchQuery} in Electronics</div>
-                            <div className="text-sm text-muted-foreground">1,234 results found</div>
-                          </div>
-                          <div className="p-3 hover:bg-accent/50 rounded-lg cursor-pointer transition-all duration-200 hover:scale-[1.02]">
-                            <div className="font-medium">{searchQuery} in Vehicles</div>
-                            <div className="text-sm text-muted-foreground">856 results found</div>
+                          <div
+                            className="p-3 hover:bg-accent/50 rounded-lg cursor-pointer transition-all duration-200 hover:scale-[1.02]"
+                            onClick={() => router.push(`/listings?search=${encodeURIComponent(searchQuery)}`)}
+                          >
+                            <div className="font-medium">Search for "{searchQuery}"</div>
+                            <div className="text-sm text-muted-foreground">View all results</div>
                           </div>
                         </div>
                       </div>
@@ -102,6 +137,7 @@ export function HeroSection() {
                 </div>
                 <Button
                   size="lg"
+                  onClick={handleSearch}
                   className="rounded-l-none px-8 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 transition-all duration-300"
                 >
                   Search
@@ -114,7 +150,7 @@ export function HeroSection() {
           <div className="mb-12">
             <p className="text-sm text-muted-foreground mb-4 flex items-center justify-center gap-2">
               <TrendingUp className="h-4 w-4" />
-              Trending searches:
+              Trending limits:
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {trendingTerms.map((term, index) => (
@@ -123,6 +159,7 @@ export function HeroSection() {
                   variant="secondary"
                   className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-all duration-300 hover:scale-110 glass-effect"
                   style={{ animationDelay: `${index * 0.1}s` }}
+                  onClick={() => router.push(`/listings?search=${encodeURIComponent(term)}`)}
                 >
                   {term}
                 </Badge>
@@ -138,9 +175,8 @@ export function HeroSection() {
               return (
                 <div
                   key={stat.label}
-                  className={`transition-all duration-500 ${
-                    isActive ? "scale-110 opacity-100" : "scale-100 opacity-70"
-                  }`}
+                  className={`transition-all duration-500 ${isActive ? "scale-110 opacity-100" : "scale-100 opacity-70"
+                    }`}
                 >
                   <div className={`p-4 rounded-xl glass-effect ${isActive ? "bg-primary/10" : ""}`}>
                     <IconComponent
@@ -161,6 +197,7 @@ export function HeroSection() {
             <Button
               size="lg"
               className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-lg px-8 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+              onClick={() => router.push('/post-ad')}
             >
               Start Selling Today
             </Button>
