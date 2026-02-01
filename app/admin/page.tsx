@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   BarChart3,
   Users,
@@ -11,6 +11,7 @@ import {
   XCircle,
   DollarSign,
   MessageSquare,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,119 +22,56 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
-const dashboardStats = {
-  totalUsers: 15420,
-  totalAds: 8934,
-  activeBoosts: 234,
-  totalRevenue: 2450000,
-  pendingAds: 45,
-  reportedContent: 12,
-  monthlyGrowth: {
-    users: 12.5,
-    ads: 8.3,
-    revenue: 15.7,
-  },
-}
-
-const pendingAds = [
-  {
-    id: 1,
-    title: "iPhone 15 Pro Max 256GB",
-    seller: "John Doe",
-    category: "Electronics",
-    price: 450000,
-    submittedAt: "2024-01-20 10:30",
-    status: "pending",
-  },
-  {
-    id: 2,
-    title: "Toyota Prius 2020",
-    seller: "Sarah Wilson",
-    category: "Vehicles",
-    price: 8500000,
-    submittedAt: "2024-01-20 09:15",
-    status: "pending",
-  },
-  {
-    id: 3,
-    title: "Apartment for Rent",
-    seller: "Property Plus",
-    category: "Property",
-    price: 75000,
-    submittedAt: "2024-01-20 08:45",
-    status: "pending",
-  },
-]
-
-const reportedContent = [
-  {
-    id: 1,
-    type: "ad",
-    title: "Suspicious Electronics Sale",
-    reporter: "User123",
-    reason: "Fake product",
-    reportedAt: "2024-01-20 11:00",
-    status: "pending",
-  },
-  {
-    id: 2,
-    type: "chat",
-    title: "Inappropriate Messages",
-    reporter: "User456",
-    reason: "Harassment",
-    reportedAt: "2024-01-20 10:30",
-    status: "pending",
-  },
-]
-
-const boostCampaigns = [
-  {
-    id: 1,
-    adTitle: "iPhone 15 Pro Max",
-    user: "John Doe",
-    package: "Pro",
-    amount: 2500,
-    startDate: "2024-01-15",
-    endDate: "2024-01-22",
-    status: "active",
-    impressions: 15420,
-    clicks: 1247,
-  },
-  {
-    id: 2,
-    adTitle: "MacBook Pro M3",
-    user: "Mike Chen",
-    package: "Starter",
-    amount: 1000,
-    startDate: "2024-01-18",
-    endDate: "2024-01-21",
-    status: "active",
-    impressions: 5680,
-    clicks: 456,
-  },
-]
-
-const recentUsers = [
-  {
-    id: 1,
-    name: "Alice Johnson",
-    email: "alice@example.com",
-    joinedAt: "2024-01-20",
-    adsCount: 3,
-    verified: true,
-  },
-  {
-    id: 2,
-    name: "Bob Smith",
-    email: "bob@example.com",
-    joinedAt: "2024-01-19",
-    adsCount: 1,
-    verified: false,
-  },
-]
-
 export default function AdminPage() {
   const [selectedTimeframe, setSelectedTimeframe] = useState("7d")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalAds: 0,
+    activeBoosts: 0,
+    totalRevenue: 0,
+    pendingAds: 0,
+    reportedContent: 0,
+    monthlyGrowth: {
+      users: 0,
+      ads: 0,
+      revenue: 0,
+    },
+  })
+
+  const [pendingAdsList, setPendingAdsList] = useState<any[]>([])
+  const [activeBoostsList, setActiveBoostsList] = useState<any[]>([])
+  const [recentUsersList, setRecentUsersList] = useState<any[]>([])
+  const [reportedContentList, setReportedContentList] = useState<any[]>([]) // Add if api returns it
+
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        const res = await fetch("/api/admin/dashboard")
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            throw new Error("Unauthorized access")
+          }
+          throw new Error("Failed to fetch dashboard data")
+        }
+        const data = await res.json()
+
+        if (data.stats) setStats(prev => ({ ...prev, ...data.stats }))
+        if (data.pendingAds) setPendingAdsList(data.pendingAds)
+        if (data.boostCampaigns) setActiveBoostsList(data.boostCampaigns)
+        if (data.recentUsers) setRecentUsersList(data.recentUsers)
+
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAdminData()
+  }, [])
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-LK", {
@@ -143,19 +81,37 @@ export default function AdminPage() {
     }).format(price)
   }
 
-  const handleApproveAd = (adId: number) => {
-    // Approve ad logic
+  const handleApproveAd = async (adId: number) => {
+    // Implement API call
     console.log("Approving ad:", adId)
   }
 
-  const handleRejectAd = (adId: number) => {
-    // Reject ad logic
+  const handleRejectAd = async (adId: number) => {
+    // Implement API call
     console.log("Rejecting ad:", adId)
   }
 
   const handleResolveReport = (reportId: number) => {
-    // Resolve report logic
     console.log("Resolving report:", reportId)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Access Denied / Error</h1>
+          <p className="text-red-400">{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -187,8 +143,8 @@ export default function AdminPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">Total Users</p>
-                  <p className="text-2xl font-bold">{dashboardStats.totalUsers.toLocaleString()}</p>
-                  <p className="text-xs text-green-400">+{dashboardStats.monthlyGrowth.users}% this month</p>
+                  <p className="text-2xl font-bold">{stats.totalUsers.toLocaleString()}</p>
+                  <p className="text-xs text-green-400">+{stats.monthlyGrowth.users}% this month</p>
                 </div>
                 <Users className="w-8 h-8 text-blue-400" />
               </div>
@@ -200,8 +156,8 @@ export default function AdminPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">Total Ads</p>
-                  <p className="text-2xl font-bold">{dashboardStats.totalAds.toLocaleString()}</p>
-                  <p className="text-xs text-green-400">+{dashboardStats.monthlyGrowth.ads}% this month</p>
+                  <p className="text-2xl font-bold">{stats.totalAds.toLocaleString()}</p>
+                  <p className="text-xs text-green-400">+{stats.monthlyGrowth.ads}% this month</p>
                 </div>
                 <FileText className="w-8 h-8 text-green-400" />
               </div>
@@ -213,8 +169,8 @@ export default function AdminPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">Active Boosts</p>
-                  <p className="text-2xl font-bold">{dashboardStats.activeBoosts}</p>
-                  <p className="text-xs text-gray-400">{dashboardStats.pendingAds} pending approval</p>
+                  <p className="text-2xl font-bold">{stats.activeBoosts}</p>
+                  <p className="text-xs text-gray-400">{stats.pendingAds} pending approval</p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-purple-400" />
               </div>
@@ -226,8 +182,8 @@ export default function AdminPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">Revenue</p>
-                  <p className="text-2xl font-bold">{formatPrice(dashboardStats.totalRevenue)}</p>
-                  <p className="text-xs text-green-400">+{dashboardStats.monthlyGrowth.revenue}% this month</p>
+                  <p className="text-2xl font-bold">{formatPrice(stats.totalRevenue)}</p>
+                  <p className="text-xs text-green-400">+{stats.monthlyGrowth.revenue}% this month</p>
                 </div>
                 <DollarSign className="w-8 h-8 text-yellow-400" />
               </div>
@@ -251,7 +207,7 @@ export default function AdminPage() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Pending Ad Approvals</CardTitle>
-                  <Badge className="bg-yellow-500 text-black">{dashboardStats.pendingAds} Pending</Badge>
+                  <Badge className="bg-yellow-500 text-black">{stats.pendingAds} Pending</Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -267,13 +223,17 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pendingAds.map((ad) => (
+                    {pendingAdsList.length === 0 ? (
+                      <TableRow className="border-gray-700">
+                        <TableCell colSpan={6} className="text-center text-gray-400">No pending ads</TableCell>
+                      </TableRow>
+                    ) : pendingAdsList.map((ad) => (
                       <TableRow key={ad.id} className="border-gray-700">
                         <TableCell className="font-medium">{ad.title}</TableCell>
                         <TableCell>{ad.seller}</TableCell>
                         <TableCell>{ad.category}</TableCell>
                         <TableCell className="font-semibold text-green-400">{formatPrice(ad.price)}</TableCell>
-                        <TableCell className="text-gray-400">{ad.submittedAt}</TableCell>
+                        <TableCell className="text-gray-400">{new Date(ad.submittedAt).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">
                             <Button
@@ -323,18 +283,18 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recentUsers.map((user) => (
+                    {recentUsersList.map((user) => (
                       <TableRow key={user.id} className="border-gray-700">
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="w-8 h-8">
-                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                              <AvatarFallback>{user.name?.charAt(0) || 'U'}</AvatarFallback>
                             </Avatar>
                             <span className="font-medium">{user.name}</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-gray-400">{user.email}</TableCell>
-                        <TableCell className="text-gray-400">{user.joinedAt}</TableCell>
+                        <TableCell className="text-gray-400">{new Date(user.joinedAt).toLocaleDateString()}</TableCell>
                         <TableCell>{user.adsCount}</TableCell>
                         <TableCell>
                           {user.verified ? (
@@ -382,7 +342,11 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {boostCampaigns.map((campaign) => (
+                    {activeBoostsList.length === 0 ? (
+                      <TableRow className="border-gray-700">
+                        <TableCell colSpan={8} className="text-center text-gray-400">No active campaigns</TableCell>
+                      </TableRow>
+                    ) : activeBoostsList.map((campaign) => (
                       <TableRow key={campaign.id} className="border-gray-700">
                         <TableCell className="font-medium">{campaign.adTitle}</TableCell>
                         <TableCell>{campaign.user}</TableCell>
@@ -391,7 +355,7 @@ export default function AdminPage() {
                         </TableCell>
                         <TableCell className="font-semibold text-green-400">{formatPrice(campaign.amount)}</TableCell>
                         <TableCell className="text-gray-400">
-                          {campaign.startDate} to {campaign.endDate}
+                          {new Date(campaign.startDate).toLocaleDateString()} to {new Date(campaign.endDate).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">
@@ -420,69 +384,24 @@ export default function AdminPage() {
             </Card>
           </TabsContent>
 
-          {/* Reports */}
+          {/* reports and analytics - static for now as we don't have endpoints yet */}
           <TabsContent value="reports">
             <Card className="bg-gray-800 border-gray-700">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>Reported Content</CardTitle>
-                  <Badge className="bg-red-500 text-white">{dashboardStats.reportedContent} Pending</Badge>
+                  <Badge className="bg-red-500 text-white">{stats.reportedContent} Pending</Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-gray-700">
-                      <TableHead>Type</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Reporter</TableHead>
-                      <TableHead>Reason</TableHead>
-                      <TableHead>Reported At</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportedContent.map((report) => (
-                      <TableRow key={report.id} className="border-gray-700">
-                        <TableCell>
-                          <Badge variant="outline">
-                            {report.type === "ad" ? (
-                              <FileText className="w-3 h-3 mr-1" />
-                            ) : (
-                              <MessageSquare className="w-3 h-3 mr-1" />
-                            )}
-                            {report.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">{report.title}</TableCell>
-                        <TableCell>{report.reporter}</TableCell>
-                        <TableCell>{report.reason}</TableCell>
-                        <TableCell className="text-gray-400">{report.reportedAt}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700"
-                              onClick={() => handleResolveReport(report.id)}
-                            >
-                              <CheckCircle className="w-4 h-4 mr-1" />
-                              Resolve
-                            </Button>
-                            <Button size="sm" variant="outline" className="bg-transparent">
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                {/* Placeholder for reports */}
+                <div className="text-center text-gray-500 py-4">No new reports</div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Analytics */}
           <TabsContent value="analytics">
+            {/* Keep static analytics cards for layout purposes, data is from stats state */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="bg-gray-800 border-gray-700">
                 <CardHeader>
@@ -492,45 +411,7 @@ export default function AdminPage() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span>Total Revenue</span>
-                      <span className="font-semibold text-green-400">{formatPrice(dashboardStats.totalRevenue)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Boost Revenue</span>
-                      <span className="font-semibold">{formatPrice(1850000)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Verification Revenue</span>
-                      <span className="font-semibold">{formatPrice(350000)}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Featured Ads Revenue</span>
-                      <span className="font-semibold">{formatPrice(250000)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-800 border-gray-700">
-                <CardHeader>
-                  <CardTitle>Platform Statistics</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span>Active Users (24h)</span>
-                      <span className="font-semibold">2,847</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>New Ads Today</span>
-                      <span className="font-semibold">156</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Messages Sent</span>
-                      <span className="font-semibold">1,234</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Search Queries</span>
-                      <span className="font-semibold">8,945</span>
+                      <span className="font-semibold text-green-400">{formatPrice(stats.totalRevenue)}</span>
                     </div>
                   </div>
                 </CardContent>
