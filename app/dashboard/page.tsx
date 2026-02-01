@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, Edit, Trash2, Eye, Zap, BarChart3, Heart, MessageCircle, TrendingUp } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Plus, Edit, Trash2, Eye, Zap, BarChart3, Heart, MessageCircle, TrendingUp, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,88 +9,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
-
-const userAds = [
-  {
-    id: 1,
-    title: "iPhone 15 Pro Max 256GB",
-    price: 450000,
-    status: "active",
-    views: 1247,
-    favorites: 23,
-    messages: 8,
-    boosted: true,
-    boostExpiry: "2024-01-20",
-    datePosted: "2024-01-15",
-    category: "Electronics",
-  },
-  {
-    id: 2,
-    title: "MacBook Pro M3 14-inch",
-    price: 650000,
-    status: "pending",
-    views: 89,
-    favorites: 5,
-    messages: 2,
-    boosted: false,
-    boostExpiry: null,
-    datePosted: "2024-01-18",
-    category: "Electronics",
-  },
-  {
-    id: 3,
-    title: "Toyota Prius 2020",
-    price: 8500000,
-    status: "sold",
-    views: 2156,
-    favorites: 67,
-    messages: 34,
-    boosted: true,
-    boostExpiry: "2024-01-10",
-    datePosted: "2024-01-05",
-    category: "Vehicles",
-  },
-]
-
-const boostHistory = [
-  {
-    id: 1,
-    adTitle: "iPhone 15 Pro Max 256GB",
-    package: "Pro",
-    amount: 2500,
-    startDate: "2024-01-15",
-    endDate: "2024-01-20",
-    status: "active",
-    impressions: 15420,
-    clicks: 1247,
-  },
-  {
-    id: 2,
-    adTitle: "Toyota Prius 2020",
-    package: "Premium",
-    amount: 5000,
-    startDate: "2024-01-05",
-    endDate: "2024-01-10",
-    status: "completed",
-    impressions: 28750,
-    clicks: 2156,
-  },
-]
-
-const analytics = {
-  totalViews: 3492,
-  totalFavorites: 95,
-  totalMessages: 44,
-  totalEarnings: 0,
-  thisMonth: {
-    views: 1247,
-    favorites: 23,
-    messages: 8,
-  },
-}
+import { useSession } from "next-auth/react"
+import { useAds } from "@/hooks/use-api"
 
 export default function DashboardPage() {
+  const { data: session, status } = useSession()
+  const { ads, loading: adsLoading, error, getAds } = useAds()
   const [selectedFilter, setSelectedFilter] = useState("all")
+
+  // Mock analytics for now as we don't have a specific endpoint for aggregated dashboard stats yet
+  const analytics = {
+    totalViews: ads?.ads?.reduce((acc: number, ad: any) => acc + (ad.views || 0), 0) || 0,
+    totalFavorites: ads?.ads?.reduce((acc: number, ad: any) => acc + (ad._count?.favorites || 0), 0) || 0,
+    totalMessages: 0, // Need message API
+    thisMonth: {
+      views: 0,
+      favorites: 0,
+      messages: 0,
+    },
+  }
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      getAds({ userId: session.user.id })
+    }
+  }, [session, getAds])
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-LK", {
@@ -102,20 +45,38 @@ export default function DashboardPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "active":
+      case "ACTIVE":
         return <Badge className="bg-green-100 text-green-700">Active</Badge>
-      case "pending":
+      case "PENDING":
         return <Badge className="bg-yellow-100 text-yellow-700">Pending</Badge>
-      case "sold":
+      case "SOLD":
         return <Badge className="bg-blue-100 text-blue-700">Sold</Badge>
-      case "expired":
+      case "EXPIRED":
         return <Badge className="bg-gray-100 text-gray-700">Expired</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
   }
 
-  const filteredAds = selectedFilter === "all" ? userAds : userAds.filter((ad) => ad.status === selectedFilter)
+  const userAds = ads?.ads || []
+  const filteredAds = selectedFilter === "all" ? userAds : userAds.filter((ad: any) => ad.status === selectedFilter)
+
+  if (status === "loading" || adsLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-white" />
+      </div>
+    )
+  }
+
+  if (status === "unauthenticated") {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white gap-4">
+        <p className="text-xl">Please sign in to view your dashboard</p>
+        <Button asChild><Link href="/api/auth/signin">Sign In</Link></Button>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -142,7 +103,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-sm text-gray-400">Total Views</p>
                   <p className="text-2xl font-bold">{analytics.totalViews.toLocaleString()}</p>
-                  <p className="text-xs text-green-400">+{analytics.thisMonth.views} this month</p>
+                  <p className="text-xs text-green-400">All time</p>
                 </div>
                 <Eye className="w-8 h-8 text-blue-400" />
               </div>
@@ -155,7 +116,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-sm text-gray-400">Total Favorites</p>
                   <p className="text-2xl font-bold">{analytics.totalFavorites}</p>
-                  <p className="text-xs text-green-400">+{analytics.thisMonth.favorites} this month</p>
+                  <p className="text-xs text-green-400">All time</p>
                 </div>
                 <Heart className="w-8 h-8 text-red-400" />
               </div>
@@ -168,7 +129,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-sm text-gray-400">Messages</p>
                   <p className="text-2xl font-bold">{analytics.totalMessages}</p>
-                  <p className="text-xs text-green-400">+{analytics.thisMonth.messages} this month</p>
+                  <p className="text-xs text-green-400">Check Inbox</p>
                 </div>
                 <MessageCircle className="w-8 h-8 text-green-400" />
               </div>
@@ -180,7 +141,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-400">Active Ads</p>
-                  <p className="text-2xl font-bold">{userAds.filter((ad) => ad.status === "active").length}</p>
+                  <p className="text-2xl font-bold">{userAds.filter((ad: any) => ad.status === "ACTIVE").length}</p>
                   <p className="text-xs text-gray-400">out of {userAds.length} total</p>
                 </div>
                 <TrendingUp className="w-8 h-8 text-purple-400" />
@@ -209,10 +170,10 @@ export default function DashboardPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Ads</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="sold">Sold</SelectItem>
-                      <SelectItem value="expired">Expired</SelectItem>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="PENDING">Pending</SelectItem>
+                      <SelectItem value="SOLD">Sold</SelectItem>
+                      <SelectItem value="EXPIRED">Expired</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -226,18 +187,21 @@ export default function DashboardPage() {
                       <TableHead>Status</TableHead>
                       <TableHead>Views</TableHead>
                       <TableHead>Favorites</TableHead>
-                      <TableHead>Messages</TableHead>
                       <TableHead>Posted</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAds.map((ad) => (
+                    {filteredAds.length === 0 ? (
+                      <TableRow className="border-gray-700">
+                        <TableCell colSpan={7} className="text-center text-gray-400 py-8">No ads found</TableCell>
+                      </TableRow>
+                    ) : filteredAds.map((ad: any) => (
                       <TableRow key={ad.id} className="border-gray-700">
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{ad.title}</span>
-                            {ad.boosted && (
+                            {ad.isBoosted && (
                               <Badge className="bg-green-400 text-black text-xs">
                                 <Zap className="w-3 h-3 mr-1" />
                                 Boosted
@@ -245,23 +209,24 @@ export default function DashboardPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="font-semibold text-green-400">{formatPrice(ad.price)}</TableCell>
+                        <TableCell className="font-semibold text-green-400">{formatPrice(Number(ad.price))}</TableCell>
                         <TableCell>{getStatusBadge(ad.status)}</TableCell>
-                        <TableCell>{ad.views.toLocaleString()}</TableCell>
-                        <TableCell>{ad.favorites}</TableCell>
-                        <TableCell>{ad.messages}</TableCell>
-                        <TableCell className="text-gray-400">{ad.datePosted}</TableCell>
+                        <TableCell>{(ad.views || 0).toLocaleString()}</TableCell>
+                        <TableCell>{ad._count?.favorites || 0}</TableCell>
+                        <TableCell className="text-gray-400">{new Date(ad.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/ad/${ad.id}`}>
+                              <Link href={`/listings/${ad.id}`}>
                                 <Eye className="w-4 h-4" />
                               </Link>
                             </Button>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="w-4 h-4" />
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link href={`/dashboard/edit/${ad.id}`}>
+                                <Edit className="w-4 h-4" />
+                              </Link>
                             </Button>
-                            {!ad.boosted && ad.status === "active" && (
+                            {!ad.isBoosted && ad.status === "ACTIVE" && (
                               <Button variant="ghost" size="sm" asChild>
                                 <Link href="/boost">
                                   <Zap className="w-4 h-4" />
@@ -281,109 +246,22 @@ export default function DashboardPage() {
             </Card>
           </TabsContent>
 
-          {/* Boost History Tab */}
+          {/* Boost History Tab placeholder */}
           <TabsContent value="boosts">
             <Card className="bg-gray-800 border-gray-700">
-              <CardHeader>
-                <CardTitle>Boost History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-gray-700">
-                      <TableHead>Ad Title</TableHead>
-                      <TableHead>Package</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Performance</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {boostHistory.map((boost) => (
-                      <TableRow key={boost.id} className="border-gray-700">
-                        <TableCell className="font-medium">{boost.adTitle}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{boost.package}</Badge>
-                        </TableCell>
-                        <TableCell className="font-semibold text-green-400">{formatPrice(boost.amount)}</TableCell>
-                        <TableCell className="text-gray-400">
-                          {boost.startDate} to {boost.endDate}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(boost.status)}</TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{boost.impressions.toLocaleString()} impressions</div>
-                            <div className="text-gray-400">{boost.clicks.toLocaleString()} clicks</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">
-                            <BarChart3 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <CardContent className="p-8 text-center text-gray-400">
+                No boost history found.
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Analytics Tab */}
+          {/* Analytics Tab placeholder */}
           <TabsContent value="analytics">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-gray-800 border-gray-700">
-                <CardHeader>
-                  <CardTitle>Performance Overview</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <span>Total Ad Views</span>
-                      <span className="font-semibold">{analytics.totalViews.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Average Views per Ad</span>
-                      <span className="font-semibold">
-                        {Math.round(analytics.totalViews / userAds.length).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Conversion Rate</span>
-                      <span className="font-semibold">2.3%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span>Response Rate</span>
-                      <span className="font-semibold">18.5%</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gray-800 border-gray-700">
-                <CardHeader>
-                  <CardTitle>Top Performing Ads</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {userAds
-                      .sort((a, b) => b.views - a.views)
-                      .slice(0, 3)
-                      .map((ad, index) => (
-                        <div key={ad.id} className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{ad.title}</p>
-                            <p className="text-sm text-gray-400">{ad.views.toLocaleString()} views</p>
-                          </div>
-                          <Badge variant="outline">#{index + 1}</Badge>
-                        </div>
-                      ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <Card className="bg-gray-800 border-gray-700">
+              <CardContent className="p-8 text-center text-gray-400">
+                Detailed analytics coming soon.
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

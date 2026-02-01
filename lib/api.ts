@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api'
 
 class ApiClient {
   private baseUrl: string
@@ -22,7 +22,7 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config)
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
@@ -59,6 +59,8 @@ class ApiClient {
     maxPrice?: number
     condition?: string
     type?: string
+    userId?: string
+    status?: string
   }) {
     const searchParams = new URLSearchParams()
     if (params) {
@@ -136,7 +138,7 @@ class ApiClient {
     formData.append('file', file)
 
     const url = `${this.baseUrl}/upload`
-    
+
     try {
       const response = await fetch(url, {
         method: 'POST',
