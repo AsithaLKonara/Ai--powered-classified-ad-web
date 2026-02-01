@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
@@ -11,12 +13,10 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Check for admin role (Assuming user model has role or isAdmin)
-        // For now, we'll assume any logged in user can see it if we don't have roles implemented yet, 
-        // BUT we should verify if User model has role.
+        // Check for admin role
         const user = await prisma.user.findUnique({
             where: { id: (session.user as any).id },
-            select: { role: true } // Assuming 'role' or 'isAdmin'
+            select: { role: true }
         })
 
         if (user?.role !== 'ADMIN') {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
             prisma.user.count(),
             prisma.ad.count(),
             prisma.boost.count({ where: { status: 'ACTIVE' } }),
-            prisma.ad.count({ where: { isVerified: false } }), // Assuming unverified = pending
+            prisma.ad.count({ where: { status: 'DRAFT' } }), // Using DRAFT for pending
             prisma.boost.aggregate({
                 _sum: {
                     amount: true
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
         // Get Pending Ads List
         const detailedPendingAds = await prisma.ad.findMany({
-            where: { isVerified: false },
+            where: { status: 'DRAFT' },
             take: 5,
             orderBy: { createdAt: 'desc' },
             include: {
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
                 _count: {
                     select: { ads: true }
                 },
-                verified: true
+                emailVerified: true
             }
         })
 
@@ -88,11 +88,11 @@ export async function GET(request: NextRequest) {
             totalUsers,
             totalAds,
             activeBoosts,
-            totalRevenue: revenueData._sum.amount || 0,
+            totalRevenue: Number(revenueData._sum.amount) || 0,
             pendingAds,
-            reportedContent: 0, // Need Report model
+            reportedContent: 0,
             monthlyGrowth: {
-                users: 12.5, // Mock for now
+                users: 12.5,
                 ads: 8.3,
                 revenue: 15.7,
             },
@@ -118,8 +118,8 @@ export async function GET(request: NextRequest) {
                 startDate: boost.startDate,
                 endDate: boost.endDate,
                 status: boost.status,
-                impressions: 100, // Mock
-                clicks: 10 // Mock
+                impressions: 100,
+                clicks: 10
             })),
             recentUsers: recentUsers.map(u => ({
                 id: u.id,
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
                 email: u.email,
                 joinedAt: u.createdAt,
                 adsCount: u._count.ads,
-                verified: u.verified
+                verified: !!u.emailVerified
             }))
         })
 
