@@ -4,7 +4,7 @@ const nextConfig = {
   output: 'standalone',
   poweredByHeader: false,
   compress: true,
-  
+
   // Image optimization
   images: {
     domains: ['localhost', 'classifiedhub.com', 'www.classifiedhub.com'],
@@ -12,11 +12,17 @@ const nextConfig = {
     minimumCacheTTL: 60,
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+    ],
   },
 
   // Experimental features for better performance
   experimental: {
-    optimizeCss: true,
+    optimizeCss: false,
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
     turbo: {
       rules: {
