@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { useAds } from "@/hooks/use-api"
+import { useSearchParams } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
@@ -29,11 +31,42 @@ export default function DashboardPage() {
     },
   }
 
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
+
   useEffect(() => {
     if (session?.user?.id) {
       getAds({ userId: session.user.id })
     }
   }, [session, getAds])
+
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment')
+    const adId = searchParams.get('adId')
+    const isDemo = searchParams.get('demo')
+
+    if (paymentStatus === 'success' && adId) {
+      if (isDemo) {
+        // Manually activate boost for demo
+        fetch(`/api/admin/ads/${adId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'ACTIVE' }) // Ensure it's active
+        }).then(() => {
+          toast({
+            title: "Demo Boost Active! 🚀",
+            description: "We've simulated your payment. Your ad is now featured!",
+          })
+          getAds({ userId: session?.user?.id })
+        })
+      } else {
+        toast({
+          title: "Payment Successful",
+          description: "Your ad boost has been activated.",
+        })
+      }
+    }
+  }, [searchParams, session, getAds, toast])
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-LK", {

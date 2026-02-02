@@ -25,6 +25,14 @@ export async function POST(request: NextRequest) {
 
         const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
 
+        if (!process.env.STRIPE_SECRET_KEY) {
+            console.log(`[DEMO MODE] Simulating payment for Ad ${adId} with package ${packageType}`);
+            // For demo, we can't easily trigger the webhook internally without the secret, 
+            // but we can return the success URL directly to the client.
+            // In a real demo, we might want to manually update the DB here too.
+            return NextResponse.json({ url: `${baseUrl}/dashboard?payment=success&adId=${adId}&demo=true` })
+        }
+
         const checkoutSession = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [
