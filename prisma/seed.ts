@@ -54,7 +54,7 @@ async function main() {
     await prisma.location.upsert({
       where: { slug: location.slug },
       update: {},
-      create: location,
+      create: location as any,
     })
   }
 
@@ -64,22 +64,23 @@ async function main() {
       name: 'John Doe',
       email: 'john@example.com',
       phone: '+94771234567',
-      password: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4tbQJ3qKre', // password123
+      password: '$2a$12$h6..g8.KLmFb1WqDqy4zxuWhxMi8rzTCJy5724eRGCtKFsVyj/cPC', // password123
       emailVerified: new Date(),
     },
     {
       name: 'Sarah Wilson',
       email: 'sarah@example.com',
       phone: '+94771234568',
-      password: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4tbQJ3qKre', // password123
+      password: '$2a$12$h6..g8.KLmFb1WqDqy4zxuWhxMi8rzTCJy5724eRGCtKFsVyj/cPC', // password123
       emailVerified: new Date(),
     },
     {
       name: 'Mike Chen',
       email: 'mike@example.com',
       phone: '+94771234569',
-      password: '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4tbQJ3qKre', // password123
+      password: '$2a$12$h6..g8.KLmFb1WqDqy4zxuWhxMi8rzTCJy5724eRGCtKFsVyj/cPC', // password123
       emailVerified: new Date(),
+      role: 'ADMIN',
     },
   ]
 
@@ -88,7 +89,7 @@ async function main() {
     const createdUser = await prisma.user.upsert({
       where: { email: user.email },
       update: {},
-      create: user,
+      create: user as any,
     })
     createdUsers.push(createdUser)
   }
@@ -265,14 +266,14 @@ async function main() {
       data: {
         ...adFields,
         // Ensure status is ACTIVE for these seed ads
-        status: 'ACTIVE',
+        status: 'ACTIVE' as any,
         images: {
           create: images.map((url, index) => ({
             url,
             order: index,
           }))
         }
-      }
+      } as any
     })
     console.log(`Created ad: ${ad.title}`)
   }
@@ -282,7 +283,8 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error('❌ Error seeding database:', e)
+    console.error('❌ Error seeding database:', JSON.stringify(e, null, 2))
+    console.error(e)
     process.exit(1)
   })
   .finally(async () => {
