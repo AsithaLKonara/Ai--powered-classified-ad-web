@@ -47,6 +47,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          phone: user.phone,
         }
       }
     })
@@ -58,12 +59,12 @@ export const authOptions: NextAuthOptions = {
   debug: process.env.NODE_ENV === 'development',
   pages: {
     signIn: '/auth/signin',
-    signUp: '/auth/signup',
   },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role
+        token.phone = user.phone
       }
       return token
     },
@@ -71,6 +72,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.sub!
         session.user.role = token.role
+        session.user.phone = token.phone
       }
       return session
     }

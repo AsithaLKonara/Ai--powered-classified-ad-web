@@ -21,8 +21,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
 
 export default function AdminPage() {
+  const { toast } = useToast()
+  const router = useRouter()
   const [selectedTimeframe, setSelectedTimeframe] = useState("7d")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -81,14 +85,52 @@ export default function AdminPage() {
     }).format(price)
   }
 
-  const handleApproveAd = async (adId: number) => {
-    // Implement API call
-    console.log("Approving ad:", adId)
+  const handleApproveAd = async (adId: string) => {
+    try {
+      const res = await fetch(`/api/admin/ads/${adId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ACTIVE" }),
+      })
+
+      if (res.ok) {
+        setPendingAdsList(prev => prev.filter(ad => ad.id !== adId))
+        toast({
+          title: "Ad Approved",
+          description: "The advertisement is now live on the platform.",
+        })
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to approve ad.",
+      })
+    }
   }
 
-  const handleRejectAd = async (adId: number) => {
-    // Implement API call
-    console.log("Rejecting ad:", adId)
+  const handleRejectAd = async (adId: string) => {
+    try {
+      const res = await fetch(`/api/admin/ads/${adId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REJECTED" }),
+      })
+
+      if (res.ok) {
+        setPendingAdsList(prev => prev.filter(ad => ad.id !== adId))
+        toast({
+          title: "Ad Rejected",
+          description: "The advertisement has been rejected.",
+        })
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to reject ad.",
+      })
+    }
   }
 
   const handleResolveReport = (reportId: number) => {
