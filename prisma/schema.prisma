@@ -48,6 +48,22 @@ model User {
   password      String?
   role          UserRole  @default(USER)
   status        UserStatus @default(ACTIVE)
+  
+  // Verification fields
+  isVerified           Boolean   @default(false)
+  verificationCode     String?
+  verificationExpiry   DateTime?
+  phoneVerificationCode String?
+  
+  // Profile fields
+  bio              String?   @db.Text
+  avatar           String?
+  coverImage       String?
+  
+  // Seller metrics
+  totalSales       Int       @default(0)
+  averageRating    Decimal?  @db.Decimal(3, 2)
+  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -64,6 +80,13 @@ model User {
   receivedReviews Review[] @relation("Reviewed")
   favorites     Favorite[]
   notifications Notification[]
+  sentOffers    Offer[] @relation("OfferBuyer")
+  receivedOffers Offer[] @relation("OfferSeller")
+  
+  @@index([email])
+  @@index([phone])
+  @@index([status])
+  @@index([averageRating])
 }
 
 model VerificationToken {
@@ -97,8 +120,15 @@ model Location {
   parent      Location? @relation("LocationHierarchy", fields: [parentId], references: [id])
   children    Location[] @relation("LocationHierarchy")
   ads         Ad[]
+  
+  // Coordinates for radius search
+  latitude    Decimal?  @db.Decimal(10, 8)
+  longitude   Decimal?  @db.Decimal(11, 8)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  @@index([latitude, longitude])
 }
 
 model Ad {
@@ -117,6 +147,21 @@ model Ad {
   isBoosted   Boolean     @default(false)
   boostExpires DateTime?
   expiresAt   DateTime?
+  
+  // AI Moderation fields
+  moderationReason   String?
+  moderationCategory String?
+  moderationScore    Decimal?  @db.Decimal(3, 2)
+  
+  // Performance tracking
+  clickCount         Int       @default(0)
+  shareCount         Int       @default(0)
+  
+  // SEO fields
+  slug               String?   @unique
+  metaTitle          String?
+  metaDescription    String?   @db.Text
+  
   userId      String
   categoryId  String
   locationId  String
@@ -134,6 +179,15 @@ model Ad {
   favorites   Favorite[]
   tags        Tag[]
   attributes  AdAttribute[]
+  offers      Offer[]
+  reviews     Review[]
+  
+  @@index([status, createdAt])
+  @@index([categoryId, status])
+  @@index([locationId, status])
+  @@index([userId, status])
+  @@index([isBoosted, status])
+  @@index([slug])
 }
 
 model AdImage {
@@ -184,6 +238,7 @@ model Message {
   ad        Ad?      @relation(fields: [adId], references: [id], onDelete: Cascade)
   sender    User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   receiver  User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -237,15 +292,23 @@ model Payment {
 
 model Review {
   id          String   @id @default(cuid())
-  rating      Int
-  comment     String?
+  rating      Int      // 1-5
+  comment     String?  @db.Text
   reviewerId  String
   reviewedId  String
   adId        String?
+  isVerified  Boolean  @default(false)
+  
   reviewer    User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
   reviewed    User     @relation("Reviewed", fields: [reviewedId], references: [id], onDelete: Cascade)
+  ad          Ad?      @relation(fields: [adId], references: [id], onDelete: SetNull)
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  @@unique([reviewerId, reviewedId, adId])
+  @@index([reviewedId])
+  @@index([rating])
 }
 
 model Favorite {
@@ -393,4 +456,50 @@ enum NotificationType {
   PAYMENT
   SYSTEM
   PROMOTION
-} 
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+// New Models
+
+
+model Offer {
+  id         String      @id @default(cuid())
+  amount     Decimal
+  status     OfferStatus @default(PENDING)
+  message    String?     @db.Text
+  buyerId    String
+  sellerId   String
+  adId       String
+  
+  buyer      User        @relation("OfferBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller     User        @relation("OfferSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  ad         Ad          @relation(fields: [adId], references: [id], onDelete: Cascade)
+  
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([adId])
+  @@index([status])
+}
+
+model MessageAttachment {
+  id        String      @id @default(cuid())
+  url       String
+  type      String      // image, file
+  size      Int
+  filename  String?
+  messageId String
+  message   Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  
+  @@index([messageId])
+}
