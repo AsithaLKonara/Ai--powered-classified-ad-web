@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
@@ -172,7 +174,7 @@ export async function POST(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            verified: true,
+            emailVerified: true,
           }
         },
         category: true,
