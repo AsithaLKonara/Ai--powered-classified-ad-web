@@ -1,0 +1,526 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?   @unique
+  phoneVerified DateTime?
+  password      String?
+  role          UserRole  @default(USER)
+  status        UserStatus @default(ACTIVE)
+  
+  // Verification fields
+  isVerified           Boolean   @default(false)
+  verificationCode     String?
+  verificationExpiry   DateTime?
+  phoneVerificationCode String?
+  
+  // Profile fields
+  bio              String?   @db.Text
+  avatar           String?
+  coverImage       String?
+  
+  // Seller metrics
+  totalSales       Int       @default(0)
+  averageRating    Decimal?  @db.Decimal(3, 2)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  ads           Ad[]
+  bids          Bid[]
+  sentMessages  Message[] @relation("MessageSender")
+  receivedMessages Message[] @relation("MessageReceiver")
+  reports       Report[]
+  boosts        Boost[]
+  payments      Payment[]
+  givenReviews  Review[] @relation("Reviewer")
+  receivedReviews Review[] @relation("Reviewed")
+  favorites     Favorite[]
+  notifications Notification[]
+  sentOffers    Offer[] @relation("OfferBuyer")
+  receivedOffers Offer[] @relation("OfferSeller")
+  
+  @@index([email])
+  @@index([phone])
+  @@index([status])
+  @@index([averageRating])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  icon        String?
+  parentId    String?
+  parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  ads         Ad[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Location {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  type        LocationType
+  parentId    String?
+  parent      Location? @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children    Location[] @relation("LocationHierarchy")
+  ads         Ad[]
+  
+  // Coordinates for radius search
+  latitude    Decimal?  @db.Decimal(10, 8)
+  longitude   Decimal?  @db.Decimal(11, 8)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([latitude, longitude])
+}
+
+model Ad {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  price       Decimal?
+  currency    String      @default("LKR")
+  condition   Condition   @default(USED)
+  status      AdStatus    @default(ACTIVE)
+  type        AdType      @default(SALE)
+  views       Int         @default(0)
+  favoritesCount Int      @default(0)
+  contactCount Int        @default(0)
+  isFeatured  Boolean     @default(false)
+  isBoosted   Boolean     @default(false)
+  boostExpires DateTime?
+  expiresAt   DateTime?
+  
+  // AI Moderation fields
+  moderationReason   String?
+  moderationCategory String?
+  moderationScore    Decimal?  @db.Decimal(3, 2)
+  
+  // Performance tracking
+  clickCount         Int       @default(0)
+  shareCount         Int       @default(0)
+  
+  // SEO fields
+  slug               String?   @unique
+  metaTitle          String?
+  metaDescription    String?   @db.Text
+  
+  userId      String
+  categoryId  String
+  locationId  String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category    @relation(fields: [categoryId], references: [id])
+  location    Location    @relation(fields: [locationId], references: [id])
+  images      AdImage[]
+  bids        Bid[]
+  messages    Message[]
+  reports     Report[]
+  boosts      Boost[]
+  favorites   Favorite[]
+  tags        Tag[]
+  attributes  AdAttribute[]
+  offers      Offer[]
+  reviews     Review[]
+  
+  @@index([status, createdAt])
+  @@index([categoryId, status])
+  @@index([locationId, status])
+  @@index([userId, status])
+  @@index([isBoosted, status])
+  @@index([slug])
+  @@fulltext([title, description])
+}
+
+model AdImage {
+  id        String   @id @default(cuid())
+  url       String
+  alt       String?
+  order     Int      @default(0)
+  adId      String
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  ads   Ad[]
+}
+
+model AdAttribute {
+  id    String @id @default(cuid())
+  key   String
+  value String
+  adId  String
+  ad    Ad    @relation(fields: [adId], references: [id], onDelete: Cascade)
+}
+
+model Bid {
+  id        String   @id @default(cuid())
+  amount    Decimal
+  userId    String
+  adId      String
+  status    BidStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad   Ad   @relation(fields: [adId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  type      MessageType @default(TEXT)
+  isRead    Boolean  @default(false)
+  senderId  String
+  receiverId String
+  adId      String?
+  ad        Ad?      @relation(fields: [adId], references: [id], onDelete: Cascade)
+  sender    User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver  User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Report {
+  id          String      @id @default(cuid())
+  reason      ReportReason
+  description String?
+  status      ReportStatus @default(PENDING)
+  userId      String
+  adId        String?
+  ad          Ad?         @relation(fields: [adId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Boost {
+  id          String   @id @default(cuid())
+  type        BoostType
+  amount      Decimal
+  duration    Int      // in days
+  startDate   DateTime @default(now())
+  endDate     DateTime
+  status      BoostStatus @default(ACTIVE)
+  userId      String
+  adId        String
+  paymentId   String?
+  payment     Payment? @relation(fields: [paymentId], references: [id])
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad          Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  amount        Decimal
+  currency      String        @default("LKR")
+  status        PaymentStatus @default(PENDING)
+  method        PaymentMethod
+  transactionId String?       @unique
+  description  String?
+  metadata     Json?
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  boosts       Boost[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  rating      Int      // 1-5
+  comment     String?  @db.Text
+  reviewerId  String
+  reviewedId  String
+  adId        String?
+  isVerified  Boolean  @default(false)
+  
+  reviewer    User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewed    User     @relation("Reviewed", fields: [reviewedId], references: [id], onDelete: Cascade)
+  ad          Ad?      @relation(fields: [adId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([reviewerId, reviewedId, adId])
+  @@index([reviewedId])
+  @@index([rating])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  adId      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad   Ad   @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, adId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  data      Json?
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model Analytics {
+  id        String   @id @default(cuid())
+  type      String
+  data      Json
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+// Enums
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  PENDING
+}
+
+enum LocationType {
+  COUNTRY
+  PROVINCE
+  DISTRICT
+  CITY
+  AREA
+}
+
+enum Condition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum AdStatus {
+  DRAFT
+  ACTIVE
+  SOLD
+  EXPIRED
+  SUSPENDED
+  DELETED
+}
+
+enum AdType {
+  SALE
+  RENT
+  WANTED
+  SERVICE
+}
+
+enum BidStatus {
+  ACTIVE
+  WITHDRAWN
+  ACCEPTED
+  REJECTED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  OFFER
+}
+
+enum ReportReason {
+  INAPPROPRIATE_CONTENT
+  SPAM
+  FRAUD
+  HARASSMENT
+  COPYRIGHT_VIOLATION
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+}
+
+enum BoostType {
+  FEATURED
+  TOP_SPOT
+  URGENT
+  PREMIUM
+}
+
+enum BoostStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PENDING
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  MOBILE_PAYMENT
+  DIGITAL_WALLET
+  CASH
+}
+
+enum NotificationType {
+  MESSAGE
+  BID
+  PAYMENT
+  SYSTEM
+  PROMOTION
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+// New Models
+
+model Review {
+  id          String   @id @default(cuid())
+  rating      Int      // 1-5
+  comment     String?  @db.Text
+  reviewerId  String
+  reviewedId  String
+  adId        String?
+  isVerified  Boolean  @default(false)
+  
+  reviewer    User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewed    User     @relation("Reviewed", fields: [reviewedId], references: [id], onDelete: Cascade)
+  ad          Ad?      @relation(fields: [adId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([reviewerId, reviewedId, adId])
+  @@index([reviewedId])
+  @@index([rating])
+}
+
+model Offer {
+  id         String      @id @default(cuid())
+  amount     Decimal
+  status     OfferStatus @default(PENDING)
+  message    String?     @db.Text
+  buyerId    String
+  sellerId   String
+  adId       String
+  
+  buyer      User        @relation("OfferBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller     User        @relation("OfferSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  ad         Ad          @relation(fields: [adId], references: [id], onDelete: Cascade)
+  
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([adId])
+  @@index([status])
+}
+
+model MessageAttachment {
+  id        String      @id @default(cuid())
+  url       String
+  type      String      // image, file
+  size      Int
+  filename  String?
+  messageId String
+  message   Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  
+  @@index([messageId])
+}
