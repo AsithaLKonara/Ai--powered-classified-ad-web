@@ -51,18 +51,28 @@ export async function GET(request: NextRequest) {
       // We should probably allow 'status' param too.
     }
     const status = searchParams.get('status')
+    const sortBy = searchParams.get('sortBy') || 'newest'
+    const categories = searchParams.getAll('category')
+    const locations = searchParams.getAll('location')
+
     if (status) {
       where.status = status
     } else if (userId) {
-      // If filtering by user, satisfy the dashboard need to see all ads (except deleted maybe)
+      // If filtering by user, show all ads (except deleted)
       delete where.status
     }
 
-    if (category) {
+    // Multi-category support
+    if (categories.length > 0) {
+      where.categoryId = { in: categories }
+    } else if (category) {
       where.category = { slug: category }
     }
 
-    if (location) {
+    // Multi-location support
+    if (locations.length > 0) {
+      where.locationId = { in: locations }
+    } else if (location) {
       where.location = { slug: location }
     }
 
@@ -85,6 +95,25 @@ export async function GET(request: NextRequest) {
 
     if (type) {
       where.type = type
+    }
+
+    // Determine sort order
+    let orderBy: any = { createdAt: 'desc' } // default: newest
+    switch (sortBy) {
+      case 'oldest':
+        orderBy = { createdAt: 'asc' }
+        break
+      case 'price-low':
+        orderBy = { price: 'asc' }
+        break
+      case 'price-high':
+        orderBy = { price: 'desc' }
+        break
+      case 'popular':
+        orderBy = { views: 'desc' }
+        break
+      default:
+        orderBy = { createdAt: 'desc' }
     }
 
     const [ads, total] = await Promise.all([
@@ -111,7 +140,7 @@ export async function GET(request: NextRequest) {
             }
           }
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       }),
