@@ -126,10 +126,14 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       }
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Fetch ads error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch ads' },
+      {
+        error: 'Failed to fetch ads',
+        message: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
