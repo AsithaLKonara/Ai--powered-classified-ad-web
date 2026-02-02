@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 
-export default function SignInPage() {
+function SignInForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const { toast } = useToast()
@@ -182,5 +182,17 @@ export default function SignInPage() {
                 </Card>
             </div>
         </div>
+    )
+}
+
+export default function SignInPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[#0A0C10] flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        }>
+            <SignInForm />
+        </Suspense>
     )
 }
