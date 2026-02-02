@@ -15,11 +15,11 @@ export async function GET(request: NextRequest) {
 
         // Check for admin role
         const user = await prisma.user.findUnique({
-            where: { id: (session.user as any).id },
+            where: { id: session.user.id },
             select: { role: true }
         })
 
-        if (user?.role !== 'ADMIN') {
+        if (!['ADMIN', 'SUPER_ADMIN', 'MODERATOR'].includes(user?.role || '')) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 

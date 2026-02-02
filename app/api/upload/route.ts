@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const userId = (session.user as any).id
+    const userId = session.user.id
     if (!userId) {
       return NextResponse.json(
         { error: 'User ID not found' },

@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
-import { useCategories, useLocations } from "@/hooks/use-api"
 import { useRouter } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
+import { useCategories, useLocations } from "@/hooks/use-api"
 
 const languages = [
   { code: "en", name: "English", flag: "🇺🇸" },
@@ -26,6 +27,7 @@ const languages = [
 
 export function Navigation() {
   const router = useRouter()
+  const { data: session } = useSession()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedLanguage, setSelectedLanguage] = useState("en")
@@ -50,6 +52,8 @@ export function Navigation() {
 
     router.push(`/listings?${params.toString()}`)
   }
+
+  const isAdmin = ["ADMIN", "SUPER_ADMIN", "MODERATOR"].includes(session?.user?.role || "")
 
   return (
     <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
@@ -77,9 +81,11 @@ export function Navigation() {
             <Link href="/auctions" className="text-foreground hover:text-primary transition-colors">
               Auctions
             </Link>
-            <Link href="/dashboard" className="text-foreground hover:text-primary transition-colors">
-              My Ads
-            </Link>
+            {session && (
+              <Link href="/dashboard" className="text-foreground hover:text-primary transition-colors">
+                My Ads
+              </Link>
+            )}
             <Link
               href="/boost"
               className="text-foreground hover:text-primary transition-colors flex items-center gap-1"
@@ -109,56 +115,82 @@ export function Navigation() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Chat */}
-            <Button variant="ghost" size="sm" className="relative" asChild>
-              <Link href="/chat">
-                <MessageCircle className="w-5 h-5" />
-                <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                  {/* TODO: Fetch real unread count */}
-                  3
-                </Badge>
-              </Link>
-            </Button>
-
-            {/* Notifications */}
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="w-5 h-5" />
-              <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
-                {/* TODO: Fetch real notification count */}
-                2
-              </Badge>
-            </Button>
-
-            {/* User Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="relative">
-                  <Avatar className="w-8 h-8">
-                    <AvatarImage src="/placeholder-user.jpg" />
-                    <AvatarFallback>
-                      <User className="w-4 h-4" />
-                    </AvatarFallback>
-                  </Avatar>
+            {session ? (
+              <>
+                {/* Chat */}
+                <Button variant="ghost" size="sm" className="relative" asChild>
+                  <Link href="/chat">
+                    <MessageCircle className="w-5 h-5" />
+                    <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                      3
+                    </Badge>
+                  </Link>
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem asChild>
-                  <Link href="/dashboard">My Dashboard</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">Profile Settings</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/favorites">Favorites</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/admin">Admin Panel</Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>Logout</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+
+                {/* Notifications */}
+                <Button variant="ghost" size="sm" className="relative">
+                  <Bell className="w-5 h-5" />
+                  <Badge className="absolute -top-1 -right-1 w-5 h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs">
+                    2
+                  </Badge>
+                </Button>
+
+                {/* User Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="relative">
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={session.user.image || undefined} />
+                        <AvatarFallback>
+                          <User className="w-4 h-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="flex items-center justify-start gap-2 p-2">
+                      <div className="flex flex-col space-y-1 leading-none">
+                        {session.user.name && <p className="font-medium">{session.user.name}</p>}
+                        {session.user.email && (
+                          <p className="w-[200px] truncate text-sm text-muted-foreground">
+                            {session.user.email}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard">My Dashboard</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/profile">Profile Settings</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/favorites">Favorites</Link>
+                    </DropdownMenuItem>
+                    {isAdmin && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem asChild>
+                          <Link href="/admin">Admin Panel</Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-red-500 focus:text-red-500 cursor-pointer"
+                      onSelect={() => signOut({ callbackUrl: '/' })}
+                    >
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/auth/signin">Sign In</Link>
+              </Button>
+            )}
 
             {/* Post Ad Button */}
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" asChild>
