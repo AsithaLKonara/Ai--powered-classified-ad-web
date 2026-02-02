@@ -1,14 +1,18 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export const sendAdApprovedEmail = async (email: string, name: string, adTitle: string, adUrl: string) => {
-    try {
-        await resend.emails.send({
-            from: 'ClassifiedHub <notifications@your-domain.com>',
-            to: email,
-            subject: 'Your Ad is Live! 🚀',
-            html: `
+  if (!resend) {
+    console.log(`[DEMO MODE] Email to ${email}: Ad "${adTitle}" approved. View at: ${adUrl}`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: 'ClassifiedHub <notifications@your-domain.com>',
+      to: email,
+      subject: 'Your Ad is Live! 🚀',
+      html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #00ff84;">Congratulations ${name}!</h2>
           <p>Your advertisement <strong>"${adTitle}"</strong> has been approved and is now live on ClassifiedHub.</p>
@@ -18,19 +22,23 @@ export const sendAdApprovedEmail = async (email: string, name: string, adTitle: 
           <p style="color: #666; font-size: 14px;">Thank you for using our platform!</p>
         </div>
       `,
-        });
-    } catch (error) {
-        console.error('Email error:', error);
-    }
+    });
+  } catch (error) {
+    console.error('Email error:', error);
+  }
 };
 
 export const sendNewMessageEmail = async (email: string, senderName: string, adTitle: string, chatUrl: string) => {
-    try {
-        await resend.emails.send({
-            from: 'ClassifiedHub <notifications@your-domain.com>',
-            to: email,
-            subject: `New message from ${senderName}`,
-            html: `
+  if (!resend) {
+    console.log(`[DEMO MODE] Email to ${email}: New message from ${senderName} regarding "${adTitle}". Reply at: ${chatUrl}`);
+    return;
+  }
+  try {
+    await resend.emails.send({
+      from: 'ClassifiedHub <notifications@your-domain.com>',
+      to: email,
+      subject: `New message from ${senderName}`,
+      html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #00ff84;">You have a new message!</h2>
           <p><strong>${senderName}</strong> sent you a message regarding your ad <strong>"${adTitle}"</strong>.</p>
@@ -40,8 +48,8 @@ export const sendNewMessageEmail = async (email: string, senderName: string, adT
           <p style="color: #666; font-size: 14px;">Stay safe and happy selling!</p>
         </div>
       `,
-        });
-    } catch (error) {
-        console.error('Email error:', error);
-    }
+    });
+  } catch (error) {
+    console.error('Email error:', error);
+  }
 };
