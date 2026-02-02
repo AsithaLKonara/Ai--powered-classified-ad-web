@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { z } from 'zod'
+import { moderateContent } from '@/lib/moderation'
 
 const createAdSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
@@ -153,6 +154,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = createAdSchema.parse(body)
 
+    // Run AI Moderation
+    const moderation = await moderateContent(validatedData.title, validatedData.description)
+
+    // Determine status based on moderation
+    let status: 'ACTIVE' | 'PENDING' | 'REJECTED' = 'ACTIVE'
+    if (!moderation.isSafe) {
+      status = 'REJECTED'
+    } else if (moderation.confidence < 0.7) {
+      status = 'PENDING'
+    }
+
     const ad = await prisma.ad.create({
       data: {
         title: validatedData.title,
@@ -163,6 +175,9 @@ export async function POST(request: NextRequest) {
         condition: validatedData.condition,
         type: validatedData.type,
         userId: session.user.id,
+        status: status,
+        moderationReason: moderation.reason,
+        moderationCategory: moderation.flaggedCategory,
         images: validatedData.images ? {
           create: validatedData.images.map((url, index) => ({
             url,
@@ -189,7 +204,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
-      message: 'Ad created successfully',
+      message: status === 'ACTIVE' ? 'Ad created successfully' : 'Ad submitted for review',
       ad
     }, { status: 201 })
   } catch (error) {

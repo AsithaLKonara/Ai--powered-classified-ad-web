@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { sendAdApprovedEmail } from '@/lib/mail'
 
 export async function PATCH(
     request: NextRequest,
@@ -16,12 +17,12 @@ export async function PATCH(
         }
 
         // Check for admin role
-        const user = await prisma.user.findUnique({
+        const userRole = await prisma.user.findUnique({
             where: { id: session.user.id },
             select: { role: true }
         })
 
-        if (!['ADMIN', 'SUPER_ADMIN', 'MODERATOR'].includes(user?.role || '')) {
+        if (!['ADMIN', 'SUPER_ADMIN', 'MODERATOR'].includes(userRole?.role || '')) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
         }
 
@@ -44,7 +45,16 @@ export async function PATCH(
             }
         })
 
-        // TODO: Send email notification to user about ad status change
+        // Send email notification to user about ad status change
+        if (status === 'ACTIVE' && ad.user.email) {
+            const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+            await sendAdApprovedEmail(
+                ad.user.email,
+                ad.user.name || 'User',
+                ad.title,
+                `${baseUrl}/listings/${ad.id}`
+            )
+        }
 
         return NextResponse.json({
             message: `Ad status updated to ${status}`,

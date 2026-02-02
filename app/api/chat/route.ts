@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { sendNewMessageEmail } from '@/lib/mail'
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -62,11 +63,11 @@ export async function GET(request: NextRequest) {
 
     // Group conversations by the other user
     const conversationMap = new Map()
-    
+
     conversations.forEach(message => {
       const otherUserId = message.senderId === userId ? message.receiverId : message.senderId
       const otherUser = message.senderId === userId ? message.receiver : message.sender
-      
+
       if (!conversationMap.has(otherUserId)) {
         conversationMap.set(otherUserId, {
           userId: otherUserId,
@@ -108,10 +109,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
+import { pusherServer } from '@/lib/pusher'
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -157,6 +160,7 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             image: true,
+            email: true,
           }
         },
         ad: {
@@ -167,6 +171,24 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+
+    // Trigger real-time notification via Pusher
+    await pusherServer.trigger(`user-${receiverId}`, 'new-message', {
+      message: message.content,
+      senderName: message.sender.name,
+      adId: message.adId,
+    })
+
+    // Send email notification for new message
+    if (message.receiver.email) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+      await sendNewMessageEmail(
+        message.receiver.email,
+        message.sender.name || 'A buyer',
+        message.ad?.title || 'your ad',
+        `${baseUrl}/chat`
+      )
+    }
 
     return NextResponse.json({
       message: 'Message sent successfully',

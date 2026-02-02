@@ -14,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, X, Sparkles, TrendingUp, Zap, Eye, Target } from "lucide-react"
+import { Upload, X, Sparkles, TrendingUp, Zap, Eye, Target, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
 
 const categories = [
   "Vehicles",
@@ -120,6 +122,67 @@ export default function PostAdPage() {
 
   const removeImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const { toast } = useToast()
+  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.title || !formData.price || !formData.category || !formData.location) {
+      toast({ variant: "destructive", title: "Missing Fields", description: "Please fill in all required fields." })
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      // 1. Create Ad
+      const res = await fetch("/api/ads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: formData.title,
+          description: formData.description,
+          price: parseFloat(formData.price),
+          categoryId: formData.category, // Assuming researchers category names to IDs
+          locationId: formData.location,
+          condition: formData.condition.toUpperCase(),
+          type: "SALE",
+          images: images,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) throw new Error(data.error || "Failed to post ad")
+
+      // 2. Handle Boost Payment if enabled
+      if (formData.enableBoost && formData.selectedPackage) {
+        toast({ title: "Redirecting...", description: "Setting up your premium boost payment." })
+        const payRes = await fetch("/api/payments/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            adId: data.ad.id,
+            packageType: formData.selectedPackage.toUpperCase(),
+          }),
+        })
+        const payData = await payRes.json()
+        if (payData.url) {
+          window.location.href = payData.url
+          return
+        }
+      }
+
+      toast({ title: "Success!", description: data.message })
+      router.push("/dashboard")
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -324,11 +387,10 @@ export default function PostAdPage() {
                       {boostPackages.map((pkg) => (
                         <Card
                           key={pkg.name}
-                          className={`cursor-pointer transition-all ${
-                            formData.selectedPackage === pkg.name
-                              ? "ring-2 ring-primary bg-primary/5"
-                              : "hover:shadow-md"
-                          }`}
+                          className={`cursor-pointer transition-all ${formData.selectedPackage === pkg.name
+                            ? "ring-2 ring-primary bg-primary/5"
+                            : "hover:shadow-md"
+                            }`}
                           onClick={() => handleInputChange("selectedPackage", pkg.name)}
                         >
                           <CardContent className="p-4">
@@ -499,13 +561,22 @@ export default function PostAdPage() {
 
           {/* Submit Button */}
           <div className="mt-8 text-center">
-            <Button size="lg" className="px-12">
-              <Zap className="h-5 w-5 mr-2" />
-              Publish Ad
-              {formData.enableBoost && formData.selectedPackage && (
-                <span className="ml-2">
-                  + Boost (Rs {boostPackages.find((p) => p.name === formData.selectedPackage)?.price.toLocaleString()})
-                </span>
+            <Button size="lg" className="px-12 h-14 font-bold text-lg shadow-[0_8px_30px_rgba(0,255,132,0.3)] hover:scale-105 transition-transform" onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-5 w-5 mr-2" />
+                  Publish Ad
+                  {formData.enableBoost && formData.selectedPackage && (
+                    <span className="ml-2 font-normal">
+                      + Boost (Rs {boostPackages.find((p) => p.name === formData.selectedPackage)?.price.toLocaleString()})
+                    </span>
+                  )}
+                </>
               )}
             </Button>
             <p className="text-sm text-muted-foreground mt-2">
