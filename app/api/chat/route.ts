@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-import { pusherServer } from '@/lib/pusher'
+import { safePusherTrigger } from '@/lib/pusher'
 
 export async function POST(request: NextRequest) {
   try {
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Trigger real-time notification via Pusher
-    await pusherServer.trigger(`user-${receiverId}`, 'new-message', {
+    await safePusherTrigger(`user-${receiverId}`, 'new-message', {
       message: message.content,
       senderName: message.sender.name,
       adId: message.adId,

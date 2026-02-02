@@ -15,3 +15,15 @@ export const pusherClient = new PusherClient(
         cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'us2',
     }
 )
+
+export const safePusherTrigger = async (channel: string, event: string, data: any) => {
+    if (process.env.NEXT_PUBLIC_PUSHER_KEY === 'key' || !process.env.NEXT_PUBLIC_PUSHER_KEY) {
+        console.log(`[DEMO MODE] Pusher Skip: Channel ${channel}, Event ${event}`);
+        return;
+    }
+    try {
+        await pusherServer.trigger(channel, event, data);
+    } catch (error) {
+        console.error('Pusher trigger error:', error);
+    }
+};
