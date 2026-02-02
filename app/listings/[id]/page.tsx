@@ -24,7 +24,6 @@ async function getAd(id: string) {
                     name: true,
                     email: true,
                     phone: true,
-                    isVerified: true,
                     image: true,
                 },
             },
